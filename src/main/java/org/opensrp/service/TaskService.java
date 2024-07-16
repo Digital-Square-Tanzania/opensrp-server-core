@@ -61,7 +61,8 @@ public class TaskService {
 		String planIdentifier = task.getPlanIdentifier();
 		String taskCode = task.getCode();
 
-		return (StringUtils.isNotBlank(taskIdentifier) && taskRepository.checkIfTaskExists(entityId, jurisdiction, planIdentifier, taskCode));
+//		return (StringUtils.isNotBlank(taskIdentifier) && taskRepository.checkIfTaskExists(entityId, jurisdiction, planIdentifier, taskCode));
+		return StringUtils.isNotBlank(taskIdentifier);
 	}
 	
 	public Task addTask(Task task) {

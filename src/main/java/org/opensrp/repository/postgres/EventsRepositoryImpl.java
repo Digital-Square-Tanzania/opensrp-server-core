@@ -107,7 +107,11 @@ public class EventsRepositoryImpl extends BaseRepositoryImpl<Event> implements E
 		
 		Long id = retrievePrimaryKey(entity, allowArchived);
 		if (id == null) { // Event not added
-			throw new IllegalStateException();
+			//Discarding the saving of void events if they fail to save.
+			if (!entity.getEventType().equalsIgnoreCase("Void Event"))
+				throw new IllegalStateException();
+			else
+				return;
 		}
 		
 		setRevision(entity);
