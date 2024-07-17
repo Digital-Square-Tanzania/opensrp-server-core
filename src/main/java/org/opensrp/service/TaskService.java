@@ -61,14 +61,13 @@ public class TaskService {
 		String planIdentifier = task.getPlanIdentifier();
 		String taskCode = task.getCode();
 
-//		return (StringUtils.isNotBlank(taskIdentifier) && taskRepository.checkIfTaskExists(entityId, jurisdiction, planIdentifier, taskCode));
-		return StringUtils.isNotBlank(taskIdentifier);
+		return (StringUtils.isNotBlank(taskIdentifier) && taskRepository.checkIfTaskExists(entityId, jurisdiction, planIdentifier, taskCode));
 	}
 	
 	public Task addTask(Task task) {
 		if (StringUtils.isBlank(task.getIdentifier()))
 			throw new IllegalArgumentException("Identifier not specified");
-		if (!taskExists(task)) {
+		if (true) {
 			task.setAuthoredOn(new DateTime());
 			task.setLastModified(new DateTime());
 			taskRepository.add(task);
