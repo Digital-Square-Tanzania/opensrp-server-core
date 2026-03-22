@@ -662,6 +662,46 @@ public class EventsRepositoryTest extends BaseRepositoryTest {
 	}
 
 	@Test
+	public void testFindEventsSupportsTeamScopedEventTypeWhitelist() {
+		String syncLocationId = "mixed-sync-location";
+		String syncTeamId = "mixed-sync-team-id";
+		
+		eventsRepository.add(createSyncTestEvent("mixed-location-base", "mixed-location-form", "Routine Visit",
+		    syncLocationId, null, null, "mixed-provider"));
+		eventsRepository.add(createSyncTestEvent("mixed-team-close-base", "mixed-team-close-form", "Close Referral",
+		    "team-only-location", "Mixed Team", syncTeamId, "mixed-provider"));
+		eventsRepository.add(createSyncTestEvent("mixed-team-feedback-base", "mixed-team-feedback-form", "LTFU Feedback",
+		    "team-only-location", "Mixed Team", syncTeamId, "mixed-provider"));
+		eventsRepository.add(createSyncTestEvent("mixed-location-whitelist-base", "mixed-location-whitelist-form",
+		    "Close Referral", syncLocationId, null, null, "mixed-provider"));
+		eventsRepository.add(createSyncTestEvent("mixed-other-team-base", "mixed-other-team-form", "Close Referral",
+		    "team-only-location", "Other Team", "other-team-id", "mixed-provider"));
+		eventsRepository.add(createSyncTestEvent("mixed-other-type-base", "mixed-other-type-form", "Household Visit",
+		    "team-only-location", "Mixed Team", syncTeamId, "mixed-provider"));
+		
+		EventSearchBean eventSearchBean = new EventSearchBean();
+		eventSearchBean.setLocationId(syncLocationId);
+		eventSearchBean.setTeamId(syncTeamId);
+		eventSearchBean.setEventType("teamId:Close Referral,LTFU Feedback");
+		
+		List<Event> events = eventsRepository.findEvents(eventSearchBean, "serverVersion", "asc", 25);
+		assertEquals(3, events.size());
+		
+		Set<String> formSubmissionIds = new HashSet<>();
+		for (Event event : events) {
+			formSubmissionIds.add(event.getFormSubmissionId());
+		}
+		
+		assertTrue(formSubmissionIds.contains("mixed-location-form"));
+		assertTrue(formSubmissionIds.contains("mixed-team-close-form"));
+		assertTrue(formSubmissionIds.contains("mixed-team-feedback-form"));
+		assertFalse(formSubmissionIds.contains("mixed-location-whitelist-form"));
+		assertFalse(formSubmissionIds.contains("mixed-other-team-form"));
+		assertFalse(formSubmissionIds.contains("mixed-other-type-form"));
+		assertEquals(3L, eventsRepository.countEvents(eventSearchBean).longValue());
+	}
+
+	@Test
 	public void testFindEventsByEntityIdAndPlan() {
 		Obs obs = new Obs("concept", "decimal", "1730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", null, "3.5", null, "weight");
 		Event event = new Event().withBaseEntityId("4355345345431").withEventType("GrowthMonitoring").
@@ -749,6 +789,17 @@ public class EventsRepositoryTest extends BaseRepositoryTest {
 		details.put("productName", "Midwifery Kit");
 		details.put("planIdentifier", "335ef7a3-7f35-58aa-8263-4419464946d8");
 		event.setDetails(details);
+		return event;
+	}
+
+	private Event createSyncTestEvent(String baseEntityId, String formSubmissionId, String eventType, String locationId,
+	        String team, String teamId, String providerId) {
+		Obs obs = new Obs("concept", "decimal", "1730AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", null, "3.5", null, "weight");
+		Event event = new Event().withBaseEntityId(baseEntityId).withEventType(eventType)
+		        .withFormSubmissionId(formSubmissionId).withEventDate(new DateTime()).withObs(obs)
+		        .withLocationId(locationId).withProviderId(providerId);
+		event.setTeam(team);
+		event.setTeamId(teamId);
 		return event;
 	}
 	
