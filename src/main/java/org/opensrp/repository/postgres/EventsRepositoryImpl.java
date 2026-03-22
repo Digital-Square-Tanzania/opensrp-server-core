@@ -251,8 +251,30 @@ public class EventsRepositoryImpl extends BaseRepositoryImpl<Event> implements E
 	@Override
 	public List<Event> findEvents(EventSearchBean eventSearchBean) {
 		EventMetadataExample example = new EventMetadataExample();
-		populateEventSearchCriteria(eventSearchBean, example, true);
-		addActiveRecordCriteria(example);
+		Criteria criteria = example.createCriteria();
+		if (StringUtils.isNotEmpty(eventSearchBean.getBaseEntityId()))
+			criteria.andBaseEntityIdEqualTo(eventSearchBean.getBaseEntityId());
+		if (eventSearchBean.getEventDateFrom() != null && eventSearchBean.getEventDateTo() != null)
+			criteria.andEventDateBetween(eventSearchBean.getEventDateFrom().toDate(),
+			    eventSearchBean.getEventDateTo().toDate());
+		if (StringUtils.isNotEmpty(eventSearchBean.getEventType()))
+			criteria.andEventTypeEqualTo(eventSearchBean.getEventType());
+		if (StringUtils.isNotEmpty(eventSearchBean.getEntityType()))
+			criteria.andEntityTypeEqualTo(eventSearchBean.getEntityType());
+		if (StringUtils.isNotEmpty(eventSearchBean.getProviderId()))
+			criteria.andProviderIdEqualTo(eventSearchBean.getProviderId());
+		if (StringUtils.isNotEmpty(eventSearchBean.getLocationId()))
+			criteria.andLocationIdEqualTo(eventSearchBean.getLocationId());
+		if (eventSearchBean.getLastEditFrom() != null && eventSearchBean.getLastEditTo() != null)
+			criteria.andDateEditedBetween(eventSearchBean.getLastEditFrom().toDate(),
+			    eventSearchBean.getLastEditTo().toDate());
+		if (StringUtils.isNotEmpty(eventSearchBean.getTeam()))
+			criteria.andTeamEqualTo(eventSearchBean.getTeam());
+		if (StringUtils.isNotEmpty(eventSearchBean.getTeamId()))
+			criteria.andTeamIdEqualTo(eventSearchBean.getTeamId());
+		if (!criteria.isValid())
+			throw new IllegalArgumentException("Atleast one search filter must be specified");
+		criteria.andDateDeletedIsNull();
 		return convert(eventMetadataMapper.selectManyWithRowBounds(example, 0, DEFAULT_FETCH_SIZE));
 	}
 	
@@ -319,63 +341,62 @@ public class EventsRepositoryImpl extends BaseRepositoryImpl<Event> implements E
 	@Override
 	public List<Event> findEvents(EventSearchBean eventSearchBean, String sortBy, String sortOrder, int limit) {
 		EventMetadataExample example = new EventMetadataExample();
-		populateEventSearchCriteria(eventSearchBean, example, false);
+		populateSyncEventSearchCriteria(eventSearchBean, example);
 		addActiveRecordCriteria(example);
 		example.setOrderByClause(getOrderByClause(sortBy, sortOrder));
 		return convert(eventMetadataMapper.selectManyWithRowBounds(example, 0, limit));
 	}
 	
-	private void populateEventSearchCriteria(EventSearchBean eventSearchBean, EventMetadataExample example,
-	        boolean includeDetailedSearchFilters) {
+	private void populateSyncEventSearchCriteria(EventSearchBean eventSearchBean, EventMetadataExample example) {
 		TeamScopedEventTypesFilter teamScopedEventTypesFilter = getTeamScopedEventTypesFilter(eventSearchBean);
 		if (teamScopedEventTypesFilter.useMixedFilters()) {
-			populateEventSearchCriteria(example.createCriteria(), eventSearchBean, includeDetailedSearchFilters, true,
-			    false, null, teamScopedEventTypesFilter.getEventTypes());
-			populateEventSearchCriteria(example.or(), eventSearchBean, includeDetailedSearchFilters, false, true,
-			    teamScopedEventTypesFilter.getEventTypes(), null);
+			Criteria locationCriteria = example.createCriteria();
+			addTeamCriteria(locationCriteria, eventSearchBean);
+			addProviderIdCriteria(locationCriteria, eventSearchBean);
+			addLocationIdCriteria(locationCriteria, eventSearchBean);
+			addBaseEntityCriteria(locationCriteria, eventSearchBean);
+			if (eventSearchBean.getServerVersion() != null)
+				locationCriteria.andServerVersionGreaterThanOrEqualTo(eventSearchBean.getServerVersion());
+			addExcludedEventTypeCriteria(locationCriteria, teamScopedEventTypesFilter.getEventTypes());
+			
+			Criteria teamCriteria = example.or();
+			addTeamCriteria(teamCriteria, eventSearchBean);
+			addTeamIdCriteria(teamCriteria, eventSearchBean);
+			addProviderIdCriteria(teamCriteria, eventSearchBean);
+			addBaseEntityCriteria(teamCriteria, eventSearchBean);
+			if (eventSearchBean.getServerVersion() != null)
+				teamCriteria.andServerVersionGreaterThanOrEqualTo(eventSearchBean.getServerVersion());
+			addEventTypeCriteria(teamCriteria, teamScopedEventTypesFilter.getEventTypes());
 		} else {
-			populateEventSearchCriteria(example.createCriteria(), eventSearchBean, includeDetailedSearchFilters, true,
-			    true, teamScopedEventTypesFilter.getEventTypes(), null);
+			populateEventSearchCriteria(eventSearchBean, example);
 		}
 		
 		if (!hasValidCriteria(example))
 			throw new IllegalArgumentException("Atleast one search filter must be specified");
 	}
 
-	private void populateEventSearchCriteria(Criteria criteria, EventSearchBean eventSearchBean,
-	        boolean includeDetailedSearchFilters, boolean includeLocationCriteria, boolean includeTeamCriteria,
-	        List<String> includedEventTypes, List<String> excludedEventTypes) {
-		addBaseEntityCriteria(criteria, eventSearchBean);
+	private Criteria populateEventSearchCriteria(EventSearchBean eventSearchBean, EventMetadataExample example) {
+		Criteria criteria = example.createCriteria();
 		
-		if (includeDetailedSearchFilters) {
-			if (eventSearchBean.getEventDateFrom() != null && eventSearchBean.getEventDateTo() != null)
-				criteria.andEventDateBetween(eventSearchBean.getEventDateFrom().toDate(),
-				    eventSearchBean.getEventDateTo().toDate());
-			if (StringUtils.isNotEmpty(eventSearchBean.getEntityType()))
-				criteria.andEntityTypeEqualTo(eventSearchBean.getEntityType());
-			if (eventSearchBean.getLastEditFrom() != null && eventSearchBean.getLastEditTo() != null)
-				criteria.andDateEditedBetween(eventSearchBean.getLastEditFrom().toDate(),
-				    eventSearchBean.getLastEditTo().toDate());
-		}
+		addTeamCriteria(criteria, eventSearchBean);
+		
+		addTeamIdCriteria(criteria, eventSearchBean);
 		
 		addProviderIdCriteria(criteria, eventSearchBean);
 		
-		if (includeLocationCriteria)
-			addLocationIdCriteria(criteria, eventSearchBean);
+		addLocationIdCriteria(criteria, eventSearchBean);
 		
-		if (includeTeamCriteria) {
-			addTeamCriteria(criteria, eventSearchBean);
-			addTeamIdCriteria(criteria, eventSearchBean);
-		}
+		addBaseEntityCriteria(criteria, eventSearchBean);
 		
 		if (eventSearchBean.getServerVersion() != null)
 			criteria.andServerVersionGreaterThanOrEqualTo(eventSearchBean.getServerVersion());
 		
-		if (includedEventTypes != null) {
-			addEventTypeCriteria(criteria, includedEventTypes);
-		} else if (excludedEventTypes != null) {
-			addExcludedEventTypeCriteria(criteria, excludedEventTypes);
-		}
+		if (StringUtils.isNotEmpty(eventSearchBean.getEventType()))
+			criteria.andEventTypeEqualTo(eventSearchBean.getEventType());
+		
+		if (!criteria.isValid())
+			throw new IllegalArgumentException("Atleast one search filter must be specified");
+		return criteria;
 	}
 
 	private boolean hasValidCriteria(EventMetadataExample example) {
@@ -399,11 +420,13 @@ public class EventsRepositoryImpl extends BaseRepositoryImpl<Event> implements E
 			return TeamScopedEventTypesFilter.empty();
 		}
 		
-		boolean isTeamScopedEventTypeFilter = eventTypeFilter.startsWith(TEAM_ID_SCOPED_EVENT_TYPES_PREFIX);
-		String rawEventTypes = isTeamScopedEventTypeFilter
-		        ? eventTypeFilter.substring(TEAM_ID_SCOPED_EVENT_TYPES_PREFIX.length()) : eventTypeFilter;
+		if (!eventTypeFilter.startsWith(TEAM_ID_SCOPED_EVENT_TYPES_PREFIX)) {
+			return TeamScopedEventTypesFilter.empty();
+		}
+		
+		String rawEventTypes = eventTypeFilter.substring(TEAM_ID_SCOPED_EVENT_TYPES_PREFIX.length());
 		List<String> eventTypes = parseEventTypes(rawEventTypes);
-		boolean useMixedFilters = isTeamScopedEventTypeFilter && !eventTypes.isEmpty()
+		boolean useMixedFilters = !eventTypes.isEmpty()
 		        && StringUtils.isNotBlank(eventSearchBean.getLocationId())
 		        && StringUtils.isNotBlank(eventSearchBean.getTeamId());
 		
@@ -506,7 +529,7 @@ public class EventsRepositoryImpl extends BaseRepositoryImpl<Event> implements E
 	@Override
 	public Long countEvents(EventSearchBean eventSearchBean) {
 		EventMetadataExample example = new EventMetadataExample();
-		populateEventSearchCriteria(eventSearchBean, example, false);
+		populateSyncEventSearchCriteria(eventSearchBean, example);
 		addActiveRecordCriteria(example);
 		return eventMetadataMapper.countByExample(example);
 	}

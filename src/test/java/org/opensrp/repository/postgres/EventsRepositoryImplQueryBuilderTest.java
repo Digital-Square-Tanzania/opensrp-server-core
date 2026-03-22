@@ -21,23 +21,26 @@ public class EventsRepositoryImplQueryBuilderTest {
 		EventsRepositoryImpl repository = new EventsRepositoryImpl();
 		EventSearchBean eventSearchBean = new EventSearchBean();
 		eventSearchBean.setLocationId("sync-location-id");
+		eventSearchBean.setTeam("sync-team-name");
 		eventSearchBean.setTeamId("sync-team-id");
 		eventSearchBean.setEventType("teamId:Close Referral,LTFU Feedback");
 		eventSearchBean.setServerVersion(25L);
 		
 		EventMetadataExample example = new EventMetadataExample();
-		invokePopulateEventSearchCriteria(repository, eventSearchBean, example, false);
+		invokePopulateSyncEventSearchCriteria(repository, eventSearchBean, example);
 		
 		assertEquals(2, example.getOredCriteria().size());
 		
 		Criteria locationCriteria = example.getOredCriteria().get(0);
 		assertTrue(hasCriterion(locationCriteria, "location_id =", "sync-location-id"));
+		assertTrue(hasCriterion(locationCriteria, "team =", "sync-team-name"));
 		assertTrue(hasCriterion(locationCriteria, "event_type not in",
 		    Arrays.asList("Close Referral", "LTFU Feedback")));
 		assertTrue(hasCriterion(locationCriteria, "server_version >=", 25L));
 		assertFalse(hasCriterion(locationCriteria, "team_id =", "sync-team-id"));
 		
 		Criteria teamCriteria = example.getOredCriteria().get(1);
+		assertTrue(hasCriterion(teamCriteria, "team =", "sync-team-name"));
 		assertTrue(hasCriterion(teamCriteria, "team_id =", "sync-team-id"));
 		assertTrue(hasCriterion(teamCriteria, "event_type in", Arrays.asList("Close Referral", "LTFU Feedback")));
 		assertTrue(hasCriterion(teamCriteria, "server_version >=", 25L));
@@ -52,20 +55,36 @@ public class EventsRepositoryImplQueryBuilderTest {
 		eventSearchBean.setEventType("Close Referral,LTFU Feedback");
 		
 		EventMetadataExample example = new EventMetadataExample();
-		invokePopulateEventSearchCriteria(repository, eventSearchBean, example, false);
+		invokePopulateSyncEventSearchCriteria(repository, eventSearchBean, example);
 		
 		assertEquals(1, example.getOredCriteria().size());
 		Criteria criteria = example.getOredCriteria().get(0);
 		assertTrue(hasCriterion(criteria, "location_id =", "sync-location-id"));
-		assertTrue(hasCriterion(criteria, "event_type in", Arrays.asList("Close Referral", "LTFU Feedback")));
+		assertTrue(hasCriterion(criteria, "event_type =", "Close Referral,LTFU Feedback"));
 	}
 
-	private void invokePopulateEventSearchCriteria(EventsRepositoryImpl repository, EventSearchBean eventSearchBean,
-	        EventMetadataExample example, boolean includeDetailedSearchFilters) throws Exception {
-		Method method = EventsRepositoryImpl.class.getDeclaredMethod("populateEventSearchCriteria", EventSearchBean.class,
-		    EventMetadataExample.class, boolean.class);
+	@Test
+	public void populateEventSearchCriteriaShouldFailClosedForEmptyTeamScopedWhitelist() throws Exception {
+		EventsRepositoryImpl repository = new EventsRepositoryImpl();
+		EventSearchBean eventSearchBean = new EventSearchBean();
+		eventSearchBean.setLocationId("sync-location-id");
+		eventSearchBean.setTeamId("sync-team-id");
+		eventSearchBean.setEventType("teamId:");
+		
+		EventMetadataExample example = new EventMetadataExample();
+		invokePopulateSyncEventSearchCriteria(repository, eventSearchBean, example);
+		
+		assertEquals(1, example.getOredCriteria().size());
+		Criteria criteria = example.getOredCriteria().get(0);
+		assertTrue(hasCriterion(criteria, "event_type =", "teamId:"));
+	}
+
+	private void invokePopulateSyncEventSearchCriteria(EventsRepositoryImpl repository, EventSearchBean eventSearchBean,
+	        EventMetadataExample example) throws Exception {
+		Method method = EventsRepositoryImpl.class.getDeclaredMethod("populateSyncEventSearchCriteria", EventSearchBean.class,
+		    EventMetadataExample.class);
 		method.setAccessible(true);
-		method.invoke(repository, eventSearchBean, example, includeDetailedSearchFilters);
+		method.invoke(repository, eventSearchBean, example);
 	}
 
 	private boolean hasCriterion(Criteria criteria, String condition, Object value) {
